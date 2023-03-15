@@ -1,8 +1,19 @@
+/*
+CSC139
+Spring 2023
+Second Assignment
+Anguiano, Leonardo
+Section 02
+OSs Tested on:Linux, Mac
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <sys/timeb.h>
 #include <semaphore.h>
+#include <stdbool.h>
 
 #define MAX_SIZE 100000000
 #define MAX_THREADS 16
@@ -83,6 +94,17 @@ int main(int argc, char *argv[]){
 	// The thread start function is ThFindProd
 	// Don't forget to properly initialize shared variables
 
+	for(i = 0; i < gThreadCount; i++){
+		pthread_attr_init(&attr[i]);
+		pthread_create(&tid[i], &attr[i], ThFindProd, (void*)indices[i]);
+	}
+
+	for(i = 0; i < gThreadCount; i++){
+		pthread_join(tid[i], NULL);
+	}
+
+
+
 
     prod = ComputeTotalProduct();
 	printf("Threaded multiplication with parent waiting for all children completed in %ld ms. Product = %d\n", GetTime(), prod);
@@ -96,6 +118,31 @@ int main(int argc, char *argv[]){
 	// Initialize threads, create threads, and then make the parent continually check on all child threads
 	// The thread start function is ThFindProd
 	// Don't forget to properly initialize shared variables
+
+	for(i = 0; i < gThreadCount; i++){
+		pthread_attr_init(&attr[i]);
+		pthread_create(&tid[i], &attr[i], ThFindProd, (void*)indices[i]);
+	}
+
+	while(true){
+		bool allDone = true;
+		for(i = 0; i < gThreadCount; i++){
+			if(!gThreadDone[i]){
+				allDone = false;
+				break;
+			}
+		}
+		if(allDone){
+			break;
+		}
+	}
+
+	for(i = 0; i < gThreadCount; i++){
+		pthread_join(tid[i], NULL);
+	}
+
+
+	
 
 
     prod = ComputeTotalProduct();
@@ -114,6 +161,17 @@ int main(int argc, char *argv[]){
 	// The thread start function is ThFindProdWithSemaphore
 	// Don't forget to properly initialize shared variables and semaphores using sem_init
 
+	for(i = 0; i < gThreadCount; i++){
+		pthread_attr_init(&attr[i]);
+		pthread_create(&tid[i], &attr[i], ThFindProdWithSemaphore, (void*)indices[i]);
+	}
+
+	sem_wait(&completed);
+
+	for(i = 0; i < gThreadCount; i++){
+		pthread_join(tid[i], NULL);
+	}
+
 
 
     prod = ComputeTotalProduct();
@@ -123,6 +181,11 @@ int main(int argc, char *argv[]){
 // Write a regular sequential function to multiply all the elements in gData mod NUM_LIMIT
 // REMEMBER TO MOD BY NUM_LIMIT AFTER EACH MULTIPLICATION TO PREVENT YOUR PRODUCT VARIABLE FROM OVERFLOWING
 int SqFindProd(int size) {
+	int i, prod = 1;
+	for(i = 0; i < size; i++){
+		prod = (prod * gData[i]) % NUM_LIMIT;
+	}
+	return prod;
 
 }
 
@@ -131,6 +194,16 @@ int SqFindProd(int size) {
 // When it is done, this function should store the product in gThreadProd[threadNum] and set gThreadDone[threadNum] to true
 void* ThFindProd(void *param) {
 	int threadNum = ((int*)param)[0];
+	int start = ((int*)param)[1];
+	int end = ((int*)param)[2];
+	int i, prod = 1;
+	for(i = start; i < end; i++){
+		prod = (prod * gData[i]) % NUM_LIMIT;
+	}
+	gThreadProd[threadNum] = prod;
+	gThreadDone[threadNum] = true;
+
+	return NULL;
 
 }
 
@@ -142,6 +215,27 @@ void* ThFindProd(void *param) {
 // post the "completed" semaphore if it is the last thread to be done
 // Don't forget to protect access to gDoneThreadCount with the "mutex" semaphore
 void* ThFindProdWithSemaphore(void *param) {
+	int threadNum = ((int*)param)[0];
+	int start = ((int*)param)[1];
+	int end = ((int*)param)[2];
+	int i, prod = 1;
+	for(i = start; i < end; i++){
+		prod = (prod * gData[i]) % NUM_LIMIT;
+	}
+	gThreadProd[threadNum] = prod;
+	if(prod == 0){
+		sem_post(&completed);
+	}
+	else{
+		sem_wait(&mutex);
+		gDoneThreadCount++;
+		if(gDoneThreadCount == gThreadCount){
+			sem_post(&completed);
+		}
+		sem_post(&mutex);
+	}
+	return NULL;
+
 
 }
 
@@ -170,6 +264,13 @@ void InitSharedVars() {
 // Write a function that fills the gData array with random numbers between 1 and MAX_RANDOM_NUMBER
 // If indexForZero is valid and non-negative, set the value at that index to zero
 void GenerateInput(int size, int indexForZero) {
+	int i;
+	for(i = 0; i < size; i++){
+		gData[i] = GetRand(1, MAX_RANDOM_NUMBER);
+	}
+	if(indexForZero >= 0 && indexForZero < size){
+		gData[indexForZero] = 0;
+	}
 
 }
 
@@ -177,6 +278,15 @@ void GenerateInput(int size, int indexForZero) {
 // For each division i, indices[i][0] should be set to the division number i,
 // indices[i][1] should be set to the start index, and indices[i][2] should be set to the end index
 void CalculateIndices(int arraySize, int thrdCnt, int indices[MAX_THREADS][3]) {
+	int i;
+	int div = arraySize / thrdCnt;
+	int rem = arraySize % thrdCnt;
+	for(i = 0; i < thrdCnt; i++){
+		indices[i][0] = i;
+		indices[i][1] = i * div;
+		indices[i][2] = (i+1) * div;
+	}
+	indices[thrdCnt-1][2] += rem;
 
 }
 
