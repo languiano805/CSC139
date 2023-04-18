@@ -228,15 +228,14 @@ void* ThFindProdWithSemaphore(void *param) {
 	}
 	else{
 		sem_wait(&mutex);
-		gDoneThreadCount++;
+		gDoneThreadCount++
+		;
 		if(gDoneThreadCount == gThreadCount){
 			sem_post(&completed);
 		}
 		sem_post(&mutex);
 	}
 	return NULL;
-
-
 }
 
 int ComputeTotalProduct() {
